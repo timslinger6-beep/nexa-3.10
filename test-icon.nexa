@@ -1,0 +1,4 @@
+zeige "Hallo Welt";
+
+zahl = 10;
+ergebnis = zahl / 0;

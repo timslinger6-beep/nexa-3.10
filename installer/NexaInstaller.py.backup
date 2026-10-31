@@ -1,0 +1,243 @@
+﻿import os
+import sys
+import json
+import shutil
+import subprocess
+import winreg
+from pathlib import Path
+
+
+def get_root():
+    if getattr(sys, "frozen", False):
+        # PyInstaller: eingebettete Dateien liegen hier.
+        return Path(sys._MEIPASS)
+
+    # Bei NexaInstaller.py:
+    # Datei liegt in EigeneProgrammiersprache\installer
+    # -> parent = installer
+    # -> parent.parent = EigeneProgrammiersprache
+    return Path(__file__).resolve().parent.parent
+
+
+ROOT = get_root()
+VSIX = ROOT / "nexa-language-0.1.0.vsix"
+ICON = ROOT / "nexa-file.ico"`r`n`r`n`$PERMANENT_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "Nexa"`r`n`$PERMANENT_ICON = `$PERMANENT_DIR / "nexa-file.ico"
+
+
+def find_code():
+    candidates = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code" / "bin" / "code.cmd",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code" / "bin" / "code",
+        Path(os.environ.get("ProgramFiles", "")) / "Microsoft VS Code" / "bin" / "code.cmd",
+        Path(os.environ.get("ProgramFiles", "")) / "Microsoft VS Code" / "bin" / "code",
+        Path(os.environ.get("ProgramFiles", "")) / "Microsoft VS Code" / "Code.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code" / "Code.exe"
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return shutil.which("code") or shutil.which("code.cmd")
+
+
+def run(command):
+    print(">", " ".join(str(x) for x in command))
+    return subprocess.run(command, check=False)
+
+
+def install_vscode_extension():
+    print("\n[1/4] Installiere Nexa-VS-Code-Erweiterung...")
+
+    if not VSIX.exists():
+        print("FEHLER: nexa-language-0.1.0.vsix wurde nicht gefunden.")
+        return False
+
+    code = find_code()
+
+    if not code:
+        print("FEHLER: VS Code wurde nicht gefunden.")
+        return False
+
+    result = run([
+        str(code),
+        "--install-extension",
+        str(VSIX),
+        "--force"
+    ])
+
+    if result.returncode != 0:
+        print("VS Code CLI 'code' wurde nicht gefunden.")
+        print("Die Nexa-Erweiterung konnte nicht automatisch installiert werden.")
+        return False
+
+    print("OK")
+    return True
+
+
+def configure_vscode():
+    print("\n[2/4] Aktiviere Nexa Icons in VS Code...")
+
+    settings = Path(os.environ["APPDATA"]) / "Code" / "User" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+
+    if not settings.exists():
+        settings.write_text(
+            '{\n    "workbench.iconTheme": "nexa-icons"\n}\n',
+            encoding="utf-8"
+        )
+        print("OK")
+        return
+
+    text = settings.read_text(encoding="utf-8-sig")
+
+    # Bereits vorhandene Einstellung ersetzen.
+    import re
+
+    pattern = r'"workbench\.iconTheme"\s*:\s*"[^"]*"'
+
+    if re.search(pattern, text):
+        text = re.sub(
+            pattern,
+            '"workbench.iconTheme": "nexa-icons"',
+            text
+        )
+    else:
+        # Vor der letzten } einfügen.
+        pos = text.rfind("}")
+        if pos == -1:
+            text = '{\n    "workbench.iconTheme": "nexa-icons"\n}\n'
+        else:
+            before = text[:pos].rstrip()
+            after = text[pos:]
+
+            if before.endswith("{"):
+                text = (
+                    before
+                    + '\n    "workbench.iconTheme": "nexa-icons"\n'
+                    + after
+                )
+            else:
+                text = (
+                    before
+                    + ',\n    "workbench.iconTheme": "nexa-icons"\n'
+                    + after
+                )
+
+    settings.write_text(text, encoding="utf-8")
+    print("OK")
+
+
+def configure_windows():
+    print("\n[3/4] Registriere .nexa-Dateien und Nexa-Icon...")
+
+    if not ICON.exists():
+        print("FEHLER: nexa-file.ico wurde nicht gefunden.")
+        return False
+
+    try:
+        PERMANENT_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ICON, PERMANENT_ICON)
+    except Exception as exc:
+        print(f"FEHLER beim Kopieren des Nexa-Icons: {exc}")
+        return False
+
+    icon_path = str(PERMANENT_ICON)
+
+    classes = winreg.HKEY_CURRENT_USER
+    base = r"Software\Classes"
+
+    # .nexa -> Nexa.SourceFile
+    with winreg.CreateKey(classes, base + r"\.nexa") as key:
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "Nexa.SourceFile")
+
+    # Direkter Icon-Eintrag für .nexa
+    with winreg.CreateKey(classes, base + r"\.nexa\DefaultIcon") as key:
+        winreg.SetValueEx(
+            key,
+            "",
+            0,
+            winreg.REG_SZ,
+            f'"{icon_path}",0'
+        )
+
+    # ProgID
+    with winreg.CreateKey(classes, base + r"\Nexa.SourceFile") as key:
+        winreg.SetValueEx(
+            key,
+            "",
+            0,
+            winreg.REG_SZ,
+            "Nexa Source File"
+        )
+
+    with winreg.CreateKey(
+        classes,
+        base + r"\Nexa.SourceFile\DefaultIcon"
+    ) as key:
+        winreg.SetValueEx(
+            key,
+            "",
+            0,
+            winreg.REG_SZ,
+            f'"{icon_path}",0'
+        )
+
+    print("OK")
+    return True
+
+
+def refresh_explorer():
+    print("\n[4/4] Aktualisiere Windows Explorer...")
+
+    subprocess.run(
+        ["taskkill", "/F", "/IM", "explorer.exe"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+    import time
+    time.sleep(2)
+
+    subprocess.Popen(["explorer.exe"])
+    print("OK")
+
+
+def main():
+    print("=" * 55)
+    print("             NEXA INSTALLER")
+    print("=" * 55)
+    print()
+    print("Installationsordner:")
+    print(ROOT)
+    print()
+
+    vscode_ok = install_vscode_extension()
+    configure_vscode()
+    windows_ok = configure_windows()
+
+    if windows_ok:
+        refresh_explorer()
+
+    print()
+    print("=" * 55)
+
+    if vscode_ok and windows_ok:
+        print("NEXA WURDE ERFOLGREICH INSTALLIERT!")
+    else:
+        print("NEXA WURDE MIT HINWEISEN INSTALLIERT.")
+
+    print("=" * 55)
+    print()
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+

@@ -1,28 +1,68 @@
-import tkinter as tk
+﻿import tkinter as tk
 import time
+import sys
+import ctypes
+from pathlib import Path
 
 
 class GameRuntime:
     def __init__(self):
         self.root = None
         self.canvas = None
+
         self.width = 800
         self.height = 600
         self.background = "black"
+
+        # Standardname der Runtime
+        self.program_name = "Nexa"
+
         self.keys = set()
+        self.running = False
+
+    def set_program_name(self, name):
+        """Setzt den Namen des laufenden Nexa-Programms."""
+
+        if name is None:
+            name = "Nexa"
+
+        name = str(name).strip()
+
+        if not name:
+            name = "Nexa"
+
+        self.program_name = name
+
+        # Falls das Fenster bereits existiert, Titel sofort aktualisieren
+        if self.root is not None:
+            try:
+                self.root.title(self.program_name)
+            except tk.TclError:
+                pass
 
     def window(self, title, width, height):
+        if title is None:
+            title = ""
+
         if not isinstance(title, str):
-            raise RuntimeError("window() benötigt einen String als Titel.")
+            raise RuntimeError(
+                "window() benötigt einen String als Titel."
+            )
 
         if not isinstance(width, int) or isinstance(width, bool):
-            raise RuntimeError("window() benötigt eine Ganzzahl für die Breite.")
+            raise RuntimeError(
+                "window() benötigt eine Ganzzahl für die Breite."
+            )
 
         if not isinstance(height, int) or isinstance(height, bool):
-            raise RuntimeError("window() benötigt eine Ganzzahl für die Höhe.")
+            raise RuntimeError(
+                "window() benötigt eine Ganzzahl für die Höhe."
+            )
 
         if width <= 0 or height <= 0:
-            raise RuntimeError("Fenstergröße muss größer als 0 sein.")
+            raise RuntimeError(
+                "Fenstergröße muss größer als 0 sein."
+            )
 
         self.width = width
         self.height = height
@@ -33,16 +73,41 @@ class GameRuntime:
             except tk.TclError:
                 pass
 
+            self.root = None
+            self.canvas = None
+
         try:
+            # Windows Taskleisten-App-ID für Nexa setzen
+            if sys.platform == "win32":
+                try:
+                    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                        "Nexa.NexaRuntime"
+                    )
+                except Exception:
+                    pass
+
             self.root = tk.Tk()
+
         except tk.TclError as error:
             raise RuntimeError(
                 f"Grafikfenster konnte nicht erstellt werden: {error}"
             )
 
-        self.root.title(title)
+        # Ein expliziter Titel überschreibt den automatisch gesetzten
+        # Programmnamen.
+        if title.strip():
+            self.program_name = title.strip()
+
+        self.root.title(self.program_name)
         self.root.geometry(f"{width}x{height}")
-        self.root.resizable(False, False)
+        self.root.resizable(False, False)        
+        # Nexa-Fenstericon setzen
+        icon_path = Path(__file__).resolve().parent / "NexaRuntime.ico"
+        if icon_path.exists():
+            try:
+                self.root.iconbitmap(str(icon_path))
+            except tk.TclError:
+                pass
 
         self.canvas = tk.Canvas(
             self.root,
@@ -56,8 +121,10 @@ class GameRuntime:
 
         self.root.bind("<KeyPress>", self._key_down)
         self.root.bind("<KeyRelease>", self._key_up)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
 
         self.root.focus_force()
+        self.running = True
 
     def _key_down(self, event):
         self.keys.add(event.keysym.lower())
@@ -76,7 +143,9 @@ class GameRuntime:
         self.require_window()
 
         if not isinstance(color, str):
-            raise RuntimeError("clear() benötigt eine Farbe als String.")
+            raise RuntimeError(
+                "clear() benötigt eine Farbe als String."
+            )
 
         self.background = color
         self.canvas.configure(bg=color)
@@ -96,7 +165,9 @@ class GameRuntime:
             )
 
         if not isinstance(color, str):
-            raise RuntimeError("rect() benötigt eine Farbe als String.")
+            raise RuntimeError(
+                "rect() benötigt eine Farbe als String."
+            )
 
         self.canvas.create_rectangle(
             x,
@@ -143,16 +214,22 @@ class GameRuntime:
         self.require_window()
 
         if not isinstance(x, int) or isinstance(x, bool):
-            raise RuntimeError("text() benötigt x als Ganzzahl.")
+            raise RuntimeError(
+                "text() benötigt x als Ganzzahl."
+            )
 
         if not isinstance(y, int) or isinstance(y, bool):
-            raise RuntimeError("text() benötigt y als Ganzzahl.")
+            raise RuntimeError(
+                "text() benötigt y als Ganzzahl."
+            )
 
         if not isinstance(value, str):
             value = str(value)
 
         if not isinstance(size, int) or isinstance(size, bool):
-            raise RuntimeError("text() benötigt size als Ganzzahl.")
+            raise RuntimeError(
+                "text() benötigt size als Ganzzahl."
+            )
 
         if not isinstance(color, str):
             raise RuntimeError(
@@ -171,8 +248,11 @@ class GameRuntime:
     def present(self):
         self.require_window()
 
-        self.root.update_idletasks()
-        self.root.update()
+        try:
+            self.root.update_idletasks()
+            self.root.update()
+        except tk.TclError:
+            self.close()
 
     def key_down(self, key):
         self.require_window()
@@ -187,7 +267,10 @@ class GameRuntime:
     def wait(self):
         self.require_window()
 
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        except tk.TclError:
+            self.close()
 
     def sleep(self, milliseconds):
         if not isinstance(milliseconds, int) or isinstance(milliseconds, bool):
@@ -200,18 +283,101 @@ class GameRuntime:
                 "sleep() benötigt einen Wert >= 0."
             )
 
+        if self.root is None:
+            time.sleep(milliseconds / 1000)
+            return
+
         delay = milliseconds / 1000
         end = time.time() + delay
+
         while time.time() < end:
-            self.root.update()
+            if self.root is None:
+                break
+
+            try:
+                self.root.update()
+                self.root.update_idletasks()
+            except tk.TclError:
+                break
+
             time.sleep(0.01)
 
     def close(self):
+        self.running = False
+        self.keys.clear()
+
         if self.root is not None:
             try:
                 self.root.destroy()
             except tk.TclError:
                 pass
 
-            self.root = None
-            self.canvas = None
+        self.root = None
+        self.canvas = None
+
+
+def start_runtime():
+    """
+    Startet die Nexa Game Runtime als eigenständiges Programm.
+    """
+
+    runtime = GameRuntime()
+
+    runtime.window(
+        "Nexa Game Runtime",
+        800,
+        600
+    )
+
+    runtime.clear("black")
+
+    runtime.text(
+        20,
+        20,
+        "Nexa Game Runtime",
+        32,
+        "white"
+    )
+
+    runtime.text(
+        20,
+        70,
+        "Runtime erfolgreich gestartet.",
+        20,
+        "white"
+    )
+
+    runtime.text(
+        20,
+        110,
+        "Bereit fuer Nexa-Spiele.",
+        18,
+        "gray"
+    )
+
+    runtime.present()
+    runtime.wait()
+
+
+def main():
+    try:
+        start_runtime()
+
+    except KeyboardInterrupt:
+        return
+
+    except Exception as error:
+        print()
+        print("Nexa Game Runtime Fehler:")
+        print(error)
+        print()
+
+        if getattr(sys, "frozen", False):
+            input("Enter zum Beenden...")
+
+
+if __name__ == "__main__":
+    main()
+
+
+

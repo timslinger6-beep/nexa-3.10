@@ -1,12 +1,32 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_all
+
+project_root = Path(SPECPATH)
+config_path = Path(
+    os.environ.get(
+        "NEXA_RELEASE_CONFIG_PATH",
+        str(project_root / "installer" / "release-config.json"),
+    )
+)
+if not config_path.is_file():
+    raise FileNotFoundError(f"Release-Konfiguration fehlt: {config_path}")
+
+crypto_datas, crypto_binaries, crypto_hiddenimports = collect_all("cryptography")
 
 a = Analysis(
     ['installer/NexaInstaller.py'],
-    pathex=[],
-    binaries=[],
-    datas=[('nexa-language-0.1.0.vsix', '.'), ('nexa-file.ico', '.')],
-    hiddenimports=[],
+    pathex=[str(project_root)],
+    binaries=crypto_binaries,
+    datas=[
+        (str(config_path), '.'),
+        (str(project_root / 'NexaRuntime.ico'), '.'),
+        *crypto_datas,
+    ],
+    hiddenimports=crypto_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

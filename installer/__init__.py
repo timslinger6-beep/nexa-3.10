@@ -1,0 +1,1 @@
+"""Nexa Windows installer package."""

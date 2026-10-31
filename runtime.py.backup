@@ -1,0 +1,302 @@
+﻿
+import tkinter as tk
+import time
+import sys
+
+
+class GameRuntime:
+    def __init__(self):
+        self.root = None
+        self.canvas = None
+        self.width = 800
+        self.height = 600
+        self.background = "black"`r`n        self.program_name = "Nexa"
+        self.keys = set()
+        self.running = False
+
+    def window(self, title, width, height):
+        if not isinstance(title, str):
+            raise RuntimeError("window() ben枚tigt einen String als Titel.")
+
+        if not isinstance(width, int) or isinstance(width, bool):
+            raise RuntimeError("window() ben枚tigt eine Ganzzahl f眉r die Breite.")
+
+        if not isinstance(height, int) or isinstance(height, bool):
+            raise RuntimeError("window() ben枚tigt eine Ganzzahl f眉r die H枚he.")
+
+        if width <= 0 or height <= 0:
+            raise RuntimeError("Fenstergr枚脽e muss gr枚脽er als 0 sein.")
+
+        self.width = width
+        self.height = height
+
+        if self.root is not None:
+            try:
+                self.root.destroy()
+            except tk.TclError:
+                pass
+
+        try:
+            self.root = tk.Tk()
+        except tk.TclError as error:
+            raise RuntimeError(
+                f"Grafikfenster konnte nicht erstellt werden: {error}"
+            )
+
+        self.program_name = str(title) if title else self.program_name`r`n        self.root.title(self.program_name)
+        self.root.geometry(f"{width}x{height}")
+        self.root.resizable(False, False)
+
+        self.canvas = tk.Canvas(
+            self.root,
+            width=width,
+            height=height,
+            highlightthickness=0,
+            bg=self.background
+        )
+
+        self.canvas.pack()
+
+        self.root.bind("<KeyPress>", self._key_down)
+        self.root.bind("<KeyRelease>", self._key_up)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+        self.root.focus_force()
+        self.running = True
+
+    def _key_down(self, event):
+        self.keys.add(event.keysym.lower())
+
+    def _key_up(self, event):
+        self.keys.discard(event.keysym.lower())
+
+    def require_window(self):
+        if self.root is None or self.canvas is None:
+            raise RuntimeError(
+                "Kein Spielfenster vorhanden. "
+                "Rufe zuerst window() auf."
+            )
+
+    def clear(self, color="black"):
+        self.require_window()
+
+        if not isinstance(color, str):
+            raise RuntimeError("clear() ben枚tigt eine Farbe als String.")
+
+        self.background = color
+        self.canvas.configure(bg=color)
+        self.canvas.delete("all")
+
+    def rect(self, x, y, width, height, color="white"):
+        self.require_window()
+
+        values = [x, y, width, height]
+
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in values
+        ):
+            raise RuntimeError(
+                "rect() ben枚tigt x, y, width und height als Ganzzahlen."
+            )
+
+        if not isinstance(color, str):
+            raise RuntimeError("rect() ben枚tigt eine Farbe als String.")
+
+        self.canvas.create_rectangle(
+            x,
+            y,
+            x + width,
+            y + height,
+            fill=color,
+            outline=color
+        )
+
+    def circle(self, x, y, radius, color="white"):
+        self.require_window()
+
+        values = [x, y, radius]
+
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in values
+        ):
+            raise RuntimeError(
+                "circle() ben枚tigt x, y und radius als Ganzzahlen."
+            )
+
+        if radius < 0:
+            raise RuntimeError(
+                "circle() ben枚tigt einen Radius >= 0."
+            )
+
+        if not isinstance(color, str):
+            raise RuntimeError(
+                "circle() ben枚tigt eine Farbe als String."
+            )
+
+        self.canvas.create_oval(
+            x - radius,
+            y - radius,
+            x + radius,
+            y + radius,
+            fill=color,
+            outline=color
+        )
+
+    def text(self, x, y, value, size=24, color="white"):
+        self.require_window()
+
+        if not isinstance(x, int) or isinstance(x, bool):
+            raise RuntimeError("text() ben枚tigt x als Ganzzahl.")
+
+        if not isinstance(y, int) or isinstance(y, bool):
+            raise RuntimeError("text() ben枚tigt y als Ganzzahl.")
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not isinstance(size, int) or isinstance(size, bool):
+            raise RuntimeError("text() ben枚tigt size als Ganzzahl.")
+
+        if not isinstance(color, str):
+            raise RuntimeError(
+                "text() ben枚tigt eine Farbe als String."
+            )
+
+        self.canvas.create_text(
+            x,
+            y,
+            text=value,
+            fill=color,
+            font=("Arial", size),
+            anchor="nw"
+        )
+
+    def present(self):
+        self.require_window()
+
+        self.root.update_idletasks()
+        self.root.update()
+
+    def key_down(self, key):
+        self.require_window()
+
+        if not isinstance(key, str):
+            raise RuntimeError(
+                "key_down() ben枚tigt einen String."
+            )
+
+        return key.lower() in self.keys
+
+    def wait(self):
+        self.require_window()
+        self.root.mainloop()
+
+    def sleep(self, milliseconds):
+        if not isinstance(milliseconds, int) or isinstance(milliseconds, bool):
+            raise RuntimeError(
+                "sleep() ben枚tigt eine Ganzzahl in Millisekunden."
+            )
+
+        if milliseconds < 0:
+            raise RuntimeError(
+                "sleep() ben枚tigt einen Wert >= 0."
+            )
+
+        if self.root is None:
+            time.sleep(milliseconds / 1000)
+            return
+
+        delay = milliseconds / 1000
+        end = time.time() + delay
+
+        while time.time() < end:
+            if self.root is None:
+                break
+
+            try:
+                self.root.update()
+                self.root.update_idletasks()
+            except tk.TclError:
+                break
+
+            time.sleep(0.01)
+
+    def close(self):
+        self.running = False
+
+        if self.root is not None:
+            try:
+                self.root.destroy()
+            except tk.TclError:
+                pass
+
+            self.root = None
+            self.canvas = None
+
+
+def start_runtime():
+    """
+    Startet die Nexa Game Runtime als eigenst盲ndiges Programm.
+    """
+
+    runtime = GameRuntime()
+
+    runtime.window(
+        "Nexa Game Runtime",
+        800,
+        600
+    )
+
+    runtime.clear("black")
+
+    runtime.text(
+        20,
+        20,
+        "Nexa Game Runtime",
+        32,
+        "white"
+    )
+
+    runtime.text(
+        20,
+        70,
+        "Runtime erfolgreich gestartet.",
+        20,
+        "white"
+    )
+
+    runtime.text(
+        20,
+        110,
+        "Bereit fuer Nexa-Spiele.",
+        18,
+        "gray"
+    )
+
+    runtime.present()
+    runtime.wait()
+
+
+def main():
+    try:
+        start_runtime()
+    except KeyboardInterrupt:
+        return
+    except Exception as error:
+        print()
+        print("Nexa Game Runtime Fehler:")
+        print(error)
+        print()
+
+        if getattr(sys, "frozen", False):
+            input("Enter zum Beenden...")
+
+
+if __name__ == "__main__":
+    main()
+    def set_program_name(self, name):
+        self.program_name = str(name)
+        if self.root is not None:
+            self.root.title(self.program_name)

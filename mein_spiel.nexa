@@ -12,9 +12,7 @@ var speed = 5;
 
 var score = 0;
 var game_over = 0;
-
-window("Spiel", W, H);
-
+  
 while (game_over == 0) {
 
     clear("#1a1a1a");
