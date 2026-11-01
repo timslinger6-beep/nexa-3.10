@@ -68,6 +68,13 @@ class BinaryExpression:
 
 
 @dataclass
+class ConditionalExpression:
+    condition: object
+    true_expression: object
+    false_expression: object
+
+
+@dataclass
 class CallExpression:
     name: str
     arguments: list
@@ -2006,7 +2013,7 @@ class Parser:
 
     def parse_ternary(self):
 
-        expression = self.parse_logical_or()
+        expression = self.parse_null_coalescing()
 
         if self.match(TokenType.QUESTION):
 
@@ -2019,13 +2026,22 @@ class Parser:
 
             false_expression = self.parse_expression()
 
-            return CallExpression(
-                "__nexa_ternary",
-                [
-                    expression,
-                    true_expression,
-                    false_expression
-                ]
+            return ConditionalExpression(
+                expression,
+                true_expression,
+                false_expression,
+            )
+
+        return expression
+
+    def parse_null_coalescing(self):
+        expression = self.parse_logical_or()
+
+        if self.match(TokenType.NULL_COALESCING):
+            return BinaryExpression(
+                expression,
+                TokenType.NULL_COALESCING,
+                self.parse_null_coalescing(),
             )
 
         return expression

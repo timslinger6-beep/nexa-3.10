@@ -3,7 +3,7 @@
 ## Projektstand und Sicherheitsgrenzen
 
 Der Installer baut die im Projekt vorhandene CLI-Version automatisch aus
-`main.py` (im aktuellen Arbeitsstand: Nexa 3.1.0). Die Anwendung wird als
+`main.py` (im aktuellen Arbeitsstand: Nexa 3.20.0). Die Anwendung wird als
 PyInstaller-`onedir`-Paket ausgeliefert. Python, Tkinter und die von Nexa
 verwendeten Standardbibliotheken werden in diesem Ordner mitgeliefert. Auf dem
 Ziel-PC muss Python weder installiert noch im `PATH` sein.
@@ -48,7 +48,7 @@ Lege die folgenden Dateien unter derselben HTTPS-Origin ab:
 ```text
 /nexa/stable/manifest.json
 /nexa/stable/manifest.json.sig
-/nexa/stable/packages/nexa-3.1.0-windows-x64.zip
+/nexa/stable/packages/nexa-3.20.0-windows-x64.zip
 ```
 
 Der signierte Manifest-Inhalt ist UTF-8-JSON mit Schema 1:
@@ -56,12 +56,12 @@ Der signierte Manifest-Inhalt ist UTF-8-JSON mit Schema 1:
 ```json
 {
   "schema": 1,
-  "latest": "3.1.0",
+  "latest": "3.20.0",
   "releases": [
     {
-      "version": "3.1.0",
+      "version": "3.20.0",
       "platform": "windows-x64",
-      "package_url": "https://updates.example.org/nexa/stable/packages/nexa-3.1.0-windows-x64.zip",
+      "package_url": "https://updates.example.org/nexa/stable/packages/nexa-3.20.0-windows-x64.zip",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "size": 123456789,
       "min_installer": "1.0.0"

@@ -19,6 +19,7 @@ from parser import (
     MemberExpression,
     UnaryExpression,
     BinaryExpression,
+    ConditionalExpression,
     CallExpression,
     NewExpression,
     MethodCallExpression,
@@ -1212,6 +1213,14 @@ class Interpreter:
                 operand
             )
 
+        if isinstance(expression, ConditionalExpression):
+            branch = (
+                expression.true_expression
+                if self.is_truthy(self.evaluate(expression.condition))
+                else expression.false_expression
+            )
+            return self.evaluate(branch)
+
         if isinstance(expression, BinaryExpression):
 
             left = self.evaluate(
@@ -1239,6 +1248,11 @@ class Interpreter:
                 )
 
                 return self.is_truthy(right)
+
+            if expression.operator == TokenType.NULL_COALESCING:
+                if left is not None:
+                    return left
+                return self.evaluate(expression.right)
 
             right = self.evaluate(
                 expression.right

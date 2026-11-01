@@ -1,5 +1,5 @@
 ﻿# ============================================================
-# NEXA 3.0.0
+# NEXA 3.20.0
 # Hauptprogramm / CLI
 # ============================================================
 
@@ -20,7 +20,7 @@ from pathlib import Path
 # VERSION / KONFIGURATION
 # ============================================================
 
-VERSION = "3.0.0"
+VERSION = "3.20.0"
 
 SUPPORTED_EXTENSIONS = {
     ".nexa",
@@ -2416,7 +2416,7 @@ def cmd_newgame(args):
   "name": "{name}",
   "type": "game",
   "version": "1.0.0",
-  "nexa": "3.0.0",
+  "nexa": "3.20.0",
   "entry": "main.nexa"
 }}
 '''
@@ -2683,7 +2683,7 @@ ALIASES = {
 
 def print_help():
     print()
-    print("Nexa 3.0.0")
+    print(f"Nexa {VERSION}")
     print("=" * 70)
     print("Die Nexa Command Line Interface")
     print()
@@ -2848,7 +2848,6 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
 
 

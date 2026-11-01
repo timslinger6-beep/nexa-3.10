@@ -4,7 +4,7 @@ import os
 import platform as platform_module
 from pathlib import Path
 import legacy_cli
-from extended_cli import EXTRA_COMMANDS
+from extended_cli import EXTRA_COMMANDS, keyword_commands
 
 try:
     if getattr(sys, "frozen", False):
@@ -15,7 +15,7 @@ except Exception:
 # ============================================================
 # VERSION / KONFIGURATION
 # ============================================================
-VERSION = "3.1.0"
+VERSION = "3.20.0"
 SUPPORTED_EXTENSIONS = {".nexa", ".my"}
 
 # ============================================================
@@ -408,11 +408,14 @@ CURRENT_COMMANDS = {
 def all_commands():
     commands = dict(legacy_cli.COMMANDS)
     commands.update(CURRENT_COMMANDS)
-    collisions = commands.keys() & EXTRA_COMMANDS.keys()
+    extra_commands = dict(EXTRA_COMMANDS)
+    if Lexer is not None:
+        extra_commands.update(keyword_commands())
+    collisions = commands.keys() & extra_commands.keys()
     if collisions:
         names = ", ".join(sorted(collisions))
         raise RuntimeError(f"Doppelte Nexa-Befehle: {names}")
-    commands.update(EXTRA_COMMANDS)
+    commands.update(extra_commands)
     return commands
 
 # ============================================================
