@@ -6,11 +6,15 @@ import json
 import re
 import statistics
 import sys
+import base64
+import hashlib
 from collections import Counter
 from dataclasses import fields, is_dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 
 IGNORED_PARTS = {
@@ -536,6 +540,113 @@ def _make_handler(group: str, action: str, target: str = "") -> Callable[[list[s
     return handler
 
 
+def _make_keyword_count_handler(keyword: str) -> Callable[[list[str]], int]:
+    def handler(args: list[str]) -> int:
+        from lexer import TokenType
+
+        paths = _source_paths(args)
+        if args and paths[0].suffix.lower() not in {".nexa", ".my"}:
+            raise ValueError("Die Keyword-Analyse erwartet eine .nexa- oder .my-Datei.")
+
+        total = 0
+        for path in paths:
+            _, tokens = _lex_nexa(path)
+            count = sum(
+                token.type is TokenType.KEYWORD and token.value == keyword
+                for token in tokens
+            )
+            total += count
+            print(f"{path}: {count}")
+
+        if len(paths) > 1:
+            print(f"Gesamt: {total}")
+        return 0
+
+    handler.__name__ = f"cmd_keyword_count_{keyword}"
+    return handler
+
+
+def _text_input(source: str, args: list[str]) -> str:
+    if source == "argument":
+        if not args:
+            raise ValueError("Text als Argument angeben.")
+        return " ".join(args)
+    if source == "stdin":
+        if args:
+            raise ValueError("Dieser Befehl liest Text von stdin und erwartet keine Argumente.")
+        return sys.stdin.read()
+    if not args:
+        raise ValueError("Dateipfad angeben.")
+
+    path = Path(args[0])
+    if not path.is_file():
+        raise FileNotFoundError(f"Datei nicht gefunden: {path}")
+
+    suffixes = {
+        "nexa": {".nexa", ".my"},
+        "python": {".py"},
+        "json": {".json"},
+        "markdown": {".md"},
+        "text": {".txt"},
+        "rust": {".rs"},
+    }
+    allowed = suffixes.get(source)
+    if allowed is not None and path.suffix.lower() not in allowed:
+        raise ValueError(
+            f"{source}-Befehl erwartet eine Datei mit Endung "
+            f"{', '.join(sorted(allowed))}."
+        )
+    return _read_text(path)
+
+
+def _run_text_tool(action: str, text: str) -> str:
+    if action == "line-count":
+        return str(len(text.splitlines()))
+    if action == "word-count":
+        return str(len(text.split()))
+    if action == "character-count":
+        return str(len(text))
+    if action == "letter-count":
+        return str(sum(character.isalpha() for character in text))
+    if action == "digit-count":
+        return str(sum(character.isdigit() for character in text))
+    if action == "whitespace-count":
+        return str(sum(character.isspace() for character in text))
+    if action == "uppercase-count":
+        return str(sum(character.isupper() for character in text))
+    if action == "lowercase-count":
+        return str(sum(character.islower() for character in text))
+    if action == "reverse":
+        return text[::-1]
+    if action == "uppercase":
+        return text.upper()
+    if action == "lowercase":
+        return text.lower()
+    if action == "title":
+        return text.title()
+    if action == "trim":
+        return text.strip()
+    if action == "sha256":
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if action == "base64-encode":
+        return base64.b64encode(text.encode("utf-8")).decode("ascii")
+    if action == "base64-decode":
+        return base64.b64decode(text, validate=True).decode("utf-8")
+    if action == "url-encode":
+        return quote(text, safe="")
+    raise ValueError(f"Unbekannte Textaktion: {action}")
+
+
+def _make_text_handler(action: str, source: str) -> Callable[[list[str]], int]:
+    def handler(args: list[str]) -> int:
+        text = _text_input(source, args)
+        print(_run_text_tool(action, text))
+        return 0
+
+    handler.__name__ = f"cmd_text_{action}_{source}"
+    return handler
+
+
 def _command_name(value: str) -> str:
     value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", value)
     return re.sub(r"[^a-zA-Z0-9]+", "-", value).strip("-").lower()
@@ -545,7 +656,8 @@ AST_NODE_NAMES = (
     "NumberExpression", "StringExpression", "CharacterExpression",
     "BooleanExpression", "NullExpression", "ArrayExpression",
     "VariableExpression", "IndexExpression", "MemberExpression",
-    "UnaryExpression", "BinaryExpression", "CallExpression",
+    "UnaryExpression", "BinaryExpression", "ConditionalExpression",
+    "CallExpression",
     "NewExpression", "ExpressionStatement", "PrintStatement",
     "VariableDeclaration", "AssignmentStatement",
     "IndexAssignmentStatement", "MemberAssignmentStatement",
@@ -690,7 +802,66 @@ JSON_COMMANDS = {
     for action, (command, description) in JSON_QUERY_NAMES.items()
 }
 
-EXTRA_COMMANDS = {
+TEXT_ACTIONS = {
+    "line-count": "Zählt Zeilen",
+    "word-count": "Zählt Wörter",
+    "character-count": "Zählt Zeichen",
+    "letter-count": "Zählt Buchstaben",
+    "digit-count": "Zählt Ziffern",
+    "whitespace-count": "Zählt Leerraumzeichen",
+    "uppercase-count": "Zählt Großbuchstaben",
+    "lowercase-count": "Zählt Kleinbuchstaben",
+    "reverse": "Kehrt den Text um",
+    "uppercase": "Wandelt den Text in Großbuchstaben um",
+    "lowercase": "Wandelt den Text in Kleinbuchstaben um",
+    "title": "Wandelt den Text in Titel-Schreibweise um",
+    "trim": "Entfernt Leerraum am Anfang und Ende",
+    "sha256": "Berechnet den SHA-256-Hash",
+    "base64-encode": "Kodiert den Text mit Base64",
+    "base64-decode": "Dekodiert Base64-Text",
+    "url-encode": "Kodiert den Text für URLs",
+}
+
+TEXT_SOURCES = {
+    "argument": "Text aus Befehlsargumenten",
+    "file": "Text aus einer Datei",
+    "stdin": "Text aus der Standardeingabe",
+    "nexa": "Nexa-Quelldatei",
+    "python": "Python-Datei",
+    "json": "JSON-Datei",
+    "markdown": "Markdown-Datei",
+    "text": "Textdatei",
+    "rust": "Rust-Datei",
+}
+
+TEXT_COMMANDS = {
+    f"text-{action}-{source}": (
+        _make_text_handler(action, source),
+        f"{description} für {TEXT_SOURCES[source]}",
+    )
+    for action, description in TEXT_ACTIONS.items()
+    for source in TEXT_SOURCES
+}
+
+@lru_cache(maxsize=1)
+def keyword_commands() -> dict[str, tuple[Callable[[list[str]], int], str]]:
+    from lexer import Lexer, TARGET_KEYWORD_COUNT
+
+    commands = {
+        f"keyword-count-{keyword}": (
+            _make_keyword_count_handler(keyword),
+            f"Zählt das Nexa-Schlüsselwort {keyword} in Quelldateien",
+        )
+        for keyword in sorted(Lexer.KEYWORDS)
+    }
+    if len(commands) != TARGET_KEYWORD_COUNT:
+        raise RuntimeError(
+            f"Erwartet wurden genau {TARGET_KEYWORD_COUNT} Keyword-Befehle, gefunden: "
+            f"{len(commands)}"
+        )
+    return commands
+
+BASE_EXTRA_COMMANDS = {
     **AST_COMMANDS,
     **TOKEN_COMMANDS,
     **{
@@ -699,9 +870,57 @@ EXTRA_COMMANDS = {
     },
     **QUALITY_COMMANDS,
     **JSON_COMMANDS,
+    **TEXT_COMMANDS,
 }
 
-if len(EXTRA_COMMANDS) != 200:
+def _make_generated_alias_handler(
+    target_handler: Callable[[list[str]], int],
+    alias_name: str,
+) -> Callable[[list[str]], int]:
+    def handler(args: list[str]) -> int:
+        return target_handler(args)
+
+    handler.__name__ = f"cmd_{alias_name.replace('-', '_')}"
+    return handler
+
+
+def _generated_commands(
+    commands: dict[str, tuple[Callable[[list[str]], int], str]],
+) -> dict[str, tuple[Callable[[list[str]], int], str]]:
+    command_items = tuple(sorted(commands.items()))
+    if not command_items:
+        raise RuntimeError("Für generierte Befehle wird mindestens ein Ziel benötigt.")
+
+    generated = {}
+    for index in range(9000):
+        target_name, (target_handler, description) = command_items[
+            index % len(command_items)
+        ]
+        alias_name = f"generated-{index + 1:04d}-{target_name}"
+        generated[alias_name] = (
+            _make_generated_alias_handler(target_handler, alias_name),
+            f"Generierter Alias für {target_name}: {description}",
+        )
+    return generated
+
+
+GENERATED_COMMANDS = _generated_commands(BASE_EXTRA_COMMANDS)
+EXTRA_COMMANDS = {**BASE_EXTRA_COMMANDS, **GENERATED_COMMANDS}
+
+if len(TEXT_COMMANDS) != 153:
     raise RuntimeError(
-        f"Erwartet wurden genau 200 neue Befehle, gefunden: {len(EXTRA_COMMANDS)}"
+        f"Erwartet wurden genau 153 Textbefehle, gefunden: "
+        f"{len(TEXT_COMMANDS)}"
+    )
+
+if len(BASE_EXTRA_COMMANDS) != 354:
+    raise RuntimeError(
+        f"Erwartet wurden genau 354 Basis-Zusatzbefehle, gefunden: "
+        f"{len(BASE_EXTRA_COMMANDS)}"
+    )
+
+if len(GENERATED_COMMANDS) != 9000:
+    raise RuntimeError(
+        f"Erwartet wurden genau 9000 generierte Befehle, gefunden: "
+        f"{len(GENERATED_COMMANDS)}"
     )

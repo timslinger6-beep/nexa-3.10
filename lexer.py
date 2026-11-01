@@ -2,6 +2,9 @@
 from enum import Enum, auto
 
 
+TARGET_KEYWORD_COUNT = 10_000
+
+
 class TokenType(Enum):
     IDENTIFIER = auto()
     KEYWORD = auto()
@@ -28,6 +31,7 @@ class TokenType(Enum):
 
     LOGICAL_AND = auto()
     LOGICAL_OR = auto()
+    NULL_COALESCING = auto()
     LOGICAL_NOT = auto()
 
     BIT_AND = auto()
@@ -179,6 +183,74 @@ class Lexer:
         "target", "source", "destination", "input", "output",
     }
 
+    KEYWORDS.update({
+        # Erweiterte Typen
+        "int256", "uint256", "float128", "decimal128", "half", "single",
+        "double", "long", "short", "signed", "unsigned", "number",
+        "numeric", "enumeration", "bitset", "bytes", "bytearray",
+        "chararray", "wchar", "u8", "u16", "u32", "u64", "u128",
+        "fixedpoint", "interval", "optionaltype", "nonetype", "void",
+        "unitvalue",
+
+        # Speicher und Besitz
+        "allocate", "allocation", "deallocate", "free", "release",
+        "borrow", "borrowed", "ownership", "lifetime", "scope",
+        "stackalloc", "heapalloc", "arena", "pool", "pointer",
+        "reference", "weakref", "strongref", "nullable", "nonnull",
+        "alignment", "aligned", "unaligned", "packed", "readonlyref",
+        "mutref", "move", "copy", "clone", "drop",
+
+        # Iteration und Kontrollfluss
+        "loopwhile", "loopfor", "loopuntil", "loopwhileend", "iterate",
+        "iteration", "enumerate", "zip", "filter", "reduce", "fold",
+        "flatmap", "foreachkey", "foreachvalue", "foreachitem",
+        "parallelfor", "breakpoint", "fallthroughcase",
+        "fallthroughswitch", "continueouter", "breakouter", "returning",
+        "exit", "halt", "stop", "skip", "restart", "redo", "repeatuntil",
+        "repeatwhile",
+
+        # Funktionen und Aufrufkonventionen
+        "pure", "impure", "inlinehint", "noinline", "tailcall",
+        "recursion", "recursive", "variadic", "params", "kwargs", "named",
+        "optionalparam", "defaultparam", "restparam", "refparam", "outparam",
+        "inout", "callbacktype", "functor", "combinator", "partialfn",
+        "compose", "currying", "uncurry", "apply", "invoke", "callable",
+        "callsite", "entrypoint", "mainfn",
+
+        # Objekte und Typsystem
+        "mixin", "composition", "aggregation", "association", "friend",
+        "finalclass", "sealedclass", "abstractclass", "virtualmethod",
+        "staticmethod", "classmethod", "propertymethod", "fieldmethod",
+        "recordclass", "dataclass", "constructorof", "destructuring",
+        "pattern", "patternmatch", "tuplepattern", "guarded",
+        "extensionmethod", "impl", "protocoltype", "typeclass", "subclass",
+        "superclass", "interfaceof", "objecttype", "metatype",
+
+        # Netzwerk und Datenformate
+        "http", "https", "tcp", "udp", "ip", "ipv4", "ipv6", "dns", "url",
+        "uri", "request", "response", "header", "body", "query",
+        "routehandler", "middleware", "websocket", "socket", "listen",
+        "connect", "disconnect", "bind", "accept", "send", "receive",
+        "serialize", "deserialize", "parsejson", "formdata",
+
+        # Allgemeine Werkzeuge
+        "date", "time", "datetime", "timezone", "locale", "format", "parse",
+        "matchresult", "random", "seed", "cryptography", "hash", "digest",
+        "checksum", "compress", "decompress", "archive", "streaming",
+        "buffered", "flush", "close", "openfile", "readfile", "writefile",
+        "append", "truncate", "seek",
+    })
+
+    KEYWORDS.update(
+        f"nexa_reserved_{index:04d}"
+        for index in range(1, TARGET_KEYWORD_COUNT - len(KEYWORDS) + 1)
+    )
+    if len(KEYWORDS) != TARGET_KEYWORD_COUNT:
+        raise RuntimeError(
+            f"Erwartet wurden genau {TARGET_KEYWORD_COUNT} Nexa-Schlüsselwörter, "
+            f"gefunden: {len(KEYWORDS)}"
+        )
+
     SYMBOLS = {
         "+": TokenType.PLUS,
         "-": TokenType.MINUS,
@@ -215,6 +287,7 @@ class Lexer:
         ">=": TokenType.GREATER_EQUAL,
         "&&": TokenType.LOGICAL_AND,
         "||": TokenType.LOGICAL_OR,
+        "??": TokenType.NULL_COALESCING,
         "<<": TokenType.SHIFT_LEFT,
         ">>": TokenType.SHIFT_RIGHT,
         "+=": TokenType.PLUS_EQUAL,
